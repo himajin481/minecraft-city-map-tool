@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">
-  <title>Minecraft 都市地図エディター</title>
+  <title>Minecraft 都市地図エディター v1.2</title>
   <style>
     :root {
       color-scheme: dark;
@@ -102,7 +102,7 @@
 <div class="app">
   <header>
     <button class="mobile-only" id="leftToggle" title="ツール">☰</button>
-    <h1>都市地図エディター</h1>
+    <h1>都市地図エディター v1.2</h1>
     <button id="newBtn">新規</button>
     <button id="saveBtn">JSON保存</button>
     <button id="loadBtn">JSON読込</button>
@@ -454,9 +454,22 @@
     $("redoBtn").disabled = state.historyIndex >= state.history.length - 1;
   }
 
+  function createUniqueId(preferredId) {
+    const used = new Set(state.objects.map(o => String(o.id)));
+    if (preferredId != null && preferredId !== "" && !used.has(String(preferredId))) {
+      const id = String(preferredId);
+      const match = /^obj-(\d+)$/.exec(id);
+      if (match) state.nextId = Math.max(state.nextId, Number(match[1]) + 1);
+      return id;
+    }
+    let id;
+    do { id = "obj-" + state.nextId++; } while (used.has(id));
+    return id;
+  }
+
   function addObject(data) {
     const o = {
-      id: data.id || "obj-" + state.nextId++,
+      id: createUniqueId(data.id),
       name: data.name || "オブジェクト " + state.nextId,
       x: Number(data.x) || 0, y: Number(data.y) || 0,
       width: Math.max(MIN_SIZE, Number(data.width) || grid()),
@@ -531,14 +544,18 @@
     if (hit) {
       if (e.shiftKey) {
         state.selected.has(hit.id) ? state.selected.delete(hit.id) : state.selected.add(hit.id);
-      } else if (!state.selected.has(hit.id)) {
+      } else {
         state.selected.clear(); state.selected.add(hit.id);
       }
       state.action={type:"move",startWorld:world,originals:selectedObjects().map(clone)};
       refreshUI(); draw();
     } else {
-      if (!e.shiftKey) state.selected.clear();
-      state.action={type:"marquee",startWorld:world,currentWorld:world,additive:e.shiftKey};
+      if (e.shiftKey) {
+        state.action={type:"marquee",startWorld:world,currentWorld:world,additive:true};
+      } else {
+        state.selected.clear();
+        state.action=null;
+      }
       refreshUI(); draw();
     }
   }
