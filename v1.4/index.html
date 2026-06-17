@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5,user-scalable=yes">
+  <title>Minecraft 都市地図エディター v1.4</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101319; --panel: #171b23; --panel2: #202633; --line: #303848;
+      --text: #e7ebf2; --muted: #9ca7b8; --accent: #58a6ff; --danger: #f06a74;
+      --left: 220px; --right: 280px;
+    }
+    * { box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, sans-serif; }
+    button, input, select { font: inherit; color: inherit; }
+    button, input, select {
+      min-height: 36px; border: 1px solid var(--line); border-radius: 7px;
+      background: #11151c; padding: 7px 9px;
+    }
+    button { cursor: pointer; user-select: none; }
+    button:hover { border-color: #536079; background: #242b38; }
+    button.active { background: #173b61; border-color: var(--accent); color: #fff; }
+    button.danger { color: #ffb4ba; }
+    button:disabled { opacity: .42; cursor: default; }
+    input[type="color"] { padding: 3px; min-width: 48px; }
+    input[type="checkbox"] { min-height: 0; accent-color: var(--accent); }
+    .app { height: 100%; display: grid; grid-template-columns: var(--left) 1fr var(--right); grid-template-rows: 48px 1fr 28px; }
+    header {
+      grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; padding: 6px 10px;
+      background: #141820; border-bottom: 1px solid var(--line); white-space: nowrap; overflow-x: auto;
+    }
+    header h1 { font-size: 15px; margin: 0 12px 0 0; }
+    header button { min-height: 32px; padding: 5px 9px; }
+    .panel { background: var(--panel); overflow: auto; scrollbar-width: thin; }
+    .left { border-right: 1px solid var(--line); }
+    .right { border-left: 1px solid var(--line); }
+    .section { padding: 12px; border-bottom: 1px solid var(--line); }
+    .section h2 { margin: 0 0 9px; color: var(--muted); font-size: 11px; letter-spacing: .09em; text-transform: uppercase; }
+    .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    .tool-grid button { text-align: left; }
+    .preset-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .preset-grid button { min-height: 32px; padding: 5px 7px; text-align: left; font-size: 12px; }
+    .row { display: flex; gap: 7px; align-items: center; margin-top: 7px; }
+    .row > * { min-width: 0; flex: 1; }
+    .row label { color: var(--muted); flex: 0 0 66px; }
+    .full { width: 100%; }
+    .hint { margin: 7px 0 0; color: var(--muted); font-size: 12px; }
+    .stage { position: relative; min-width: 0; min-height: 0; overflow: hidden; background: #0d1015; touch-action: none; }
+    canvas { display: block; width: 100%; height: 100%; cursor: crosshair; touch-action: none; }
+    .float {
+      position: absolute; z-index: 3; border: 1px solid var(--line); border-radius: 7px;
+      background: rgba(20,24,32,.88); backdrop-filter: blur(5px); color: var(--muted); padding: 6px 9px;
+      pointer-events: none; font-size: 12px;
+    }
+    #zoomBadge { right: 10px; top: 10px; }
+    #selectionBadge { left: 10px; top: 10px; }
+    .coordinate-hud {
+      position: absolute; left: 50%; top: 10px; z-index: 4; transform: translateX(-50%);
+      min-width: min(620px, calc(100% - 180px)); padding: 9px 14px; border: 1px solid #536079;
+      border-radius: 10px; background: rgba(17,21,28,.94); box-shadow: 0 5px 18px #0008;
+      text-align: center; pointer-events: none; font-size: 14px; font-weight: 650;
+    }
+    .coordinate-hud span { color: #7fc3ff; }
+    .coordinate-hud small { display: block; margin-top: 2px; color: var(--muted); font-weight: 500; }
+    .tile-selected { color: #ffd17a; font-weight: 700; }
+    .object-list, .layer-list { display: flex; flex-direction: column; gap: 5px; }
+    .list-item {
+      display: grid; grid-template-columns: 18px 16px 1fr auto; align-items: center; gap: 6px;
+      min-height: 36px; padding: 5px 7px; border: 1px solid transparent; border-radius: 7px; background: #131820;
+    }
+    .list-item:hover { background: #1d2330; }
+    .list-item.selected { border-color: var(--accent); background: #172b42; }
+    .swatch { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #ffffff44; }
+    .item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
+    .mini { min-height: 25px; padding: 2px 7px; }
+    .empty { color: var(--muted); text-align: center; padding: 15px 5px; }
+    .properties label { display: block; margin: 8px 0 3px; color: var(--muted); font-size: 12px; }
+    .properties input, .properties select { width: 100%; }
+    .coord-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+    footer {
+      grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between;
+      padding: 0 10px; border-top: 1px solid var(--line); background: #141820; color: var(--muted); font-size: 12px;
+    }
+    .mobile-only { display: none; }
+    .toast {
+      position: fixed; left: 50%; bottom: 42px; z-index: 20; transform: translate(-50%, 15px);
+      opacity: 0; pointer-events: none; padding: 9px 14px; border-radius: 8px; background: #293244;
+      box-shadow: 0 6px 20px #0008; transition: .2s;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+    @media (max-width: 800px) {
+      :root { --left: min(82vw, 270px); --right: min(88vw, 300px); }
+      .app { display: block; position: relative; }
+      header { height: 48px; }
+      header h1 { display: none; }
+      header .desktop-extra { display: none; }
+      .stage { position: absolute; inset: 48px 0 28px; }
+      .panel { position: absolute; top: 48px; bottom: 28px; z-index: 10; box-shadow: 0 10px 30px #000a; transition: transform .2s; }
+      .left { width: var(--left); left: 0; transform: translateX(-105%); }
+      .right { width: var(--right); right: 0; transform: translateX(105%); }
+      .left.open, .right.open { transform: translateX(0); }
+      footer { position: absolute; left: 0; right: 0; bottom: 0; height: 28px; }
+      .mobile-only { display: inline-flex; }
+      #selectionBadge { top: 54px; }
+      #zoomBadge { top: 54px; }
+      .coordinate-hud { top: 6px; min-width: calc(100% - 20px); font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <button class="mobile-only" id="leftToggle" title="ツール">☰</button>
+    <h1>都市地図エディター v1.4</h1>
+    <button id="newBtn">新規</button>
+    <button id="saveBtn">JSON保存</button>
+    <button id="loadBtn">JSON読込</button>
+    <button id="pngBtn">PNG出力</button>
+    <button id="undoBtn" title="Ctrl+Z">元に戻す</button>
+    <button id="redoBtn" title="Ctrl+Y">やり直す</button>
+    <button class="desktop-extra" id="fitBtn">全体表示</button>
+    <button class="mobile-only" id="rightToggle" title="オブジェクト">一覧</button>
+    <input id="fileInput" type="file" accept=".json,application/json" hidden>
+  </header>
+
+  <aside class="panel left" id="leftPanel">
+    <div class="section">
+      <h2>ツール</h2>
+      <div class="tool-grid">
+        <button data-tool="select" class="active">↖ 選択</button>
+        <button data-tool="rect">▭ 矩形</button>
+        <button data-tool="pan">✋ 移動</button>
+        <button id="deleteBtn" class="danger">× 削除</button>
+      </div>
+      <p class="hint">Shift+クリックで複数選択。空白をドラッグすると範囲選択できます。</p>
+    </div>
+    <div class="section">
+      <h2>グリッド</h2>
+      <div class="row"><label for="gridSize">間隔</label><input id="gridSize" type="number" min="1" max="1000" value="10"></div>
+      <div class="row"><label for="snap"><input id="snap" type="checkbox" checked> スナップ</label></div>
+      <div class="row"><label for="showGrid"><input id="showGrid" type="checkbox" checked> 表示</label></div>
+    </div>
+    <div class="section">
+      <h2>101×101 タイル</h2>
+      <div class="row"><label for="showTiles"><input id="showTiles" type="checkbox" checked> 境界表示</label></div>
+      <div class="row"><label for="tileSize">一辺</label><input id="tileSize" type="number" min="1" value="101"></div>
+      <div class="row"><label for="tilePixels">出力倍率</label><input id="tilePixels" type="number" min="1" max="20" value="5" title="1ブロックあたりのピクセル数"></div>
+      <button id="selectTileBtn" class="full">タイルを地図上で選択</button>
+      <p id="selectedTileLabel" class="hint tile-selected">選択タイル: tile(0,0)</p>
+      <button id="tilePngBtn" class="full">選択タイルをPNG保存</button>
+      <p class="hint">保存対象はクリックで固定されるため、ボタンへ移動しても変わりません。</p>
+    </div>
+    <div class="section">
+      <h2>Minecraft座標</h2>
+      <div class="row"><label for="originX">原点 X</label><input id="originX" type="number" value="0"></div>
+      <div class="row"><label for="originZ">原点 Z</label><input id="originZ" type="number" value="0"></div>
+      <p class="hint">地図Xは右がプラス、地図Yは上がプラス。Minecraft Zは上方向で減少します。</p>
+    </div>
+    <div class="section">
+      <h2>作図設定</h2>
+      <div class="row"><label for="newType">種類</label>
+        <select id="newType"><option value="building">建物</option><option value="lot">区画</option><option value="road">道路</option><option value="park">公園</option><option value="water">水域</option></select>
+      </div>
+      <div class="row"><label for="newColor">色</label><input id="newColor" type="color" value="#4f8cff"></div>
+      <div class="row"><label><input id="continuousDraw" type="checkbox" checked> 連続作図</label></div>
+      <h2 style="margin-top:12px">かんたんプリセット</h2>
+      <div class="preset-grid">
+        <button data-preset="road">═ 道路</button><button data-preset="lot">□ 区画</button>
+        <button data-preset="building">■ 建物</button><button data-preset="park">▦ 公園</button>
+      </div>
+      <p class="hint">プリセット選択後、地図上をドラッグするだけで配置できます。</p>
+    </div>
+    <div class="section">
+      <h2>PNG出力</h2>
+      <div class="row"><label style="flex-basis:auto"><input id="pngBorders" type="checkbox" checked> PNGに矩形境界線を含める</label></div>
+      <p class="hint">画面上の境界線には影響せず、PNG出力だけを切り替えます。</p>
+    </div>
+    <div class="section">
+      <h2>レイヤー</h2>
+      <div id="layerList" class="layer-list"></div>
+      <div class="row"><button id="addLayerBtn">＋ 追加</button><button id="renameLayerBtn">名前変更</button></div>
+      <div class="row"><button id="layerUpBtn">↑ 上へ</button><button id="layerDownBtn">↓ 下へ</button></div>
+    </div>
+    <div class="section">
+      <h2>ショートカット</h2>
+      <p class="hint">V: 選択 / R: 矩形 / H: 移動<br>Ctrl+C / Ctrl+V: コピー・貼付<br>Delete: 削除 / Esc: 選択解除</p>
+    </div>
+  </aside>
+
+  <main class="stage" id="stage">
+    <canvas id="canvas"></canvas>
+    <div class="coordinate-hud" id="coordinateHud">地図 <span>X 0 / Y 0</span>　Minecraft <span>X 0 / Z 0</span><small>カーソル位置: tile(0,0)</small></div>
+    <div class="float" id="selectionBadge">選択なし</div>
+    <div class="float" id="zoomBadge">100%</div>
+  </main>
+
+  <aside class="panel right" id="rightPanel">
+    <div class="section">
+      <h2>オブジェクト</h2>
+      <div id="objectList" class="object-list"></div>
+    </div>
+    <div class="section properties">
+      <h2>選択中のプロパティ</h2>
+      <div id="noSelection" class="empty">矩形を選択してください</div>
+      <div id="propertyForm" hidden>
+        <label for="propName">名前</label><input id="propName" type="text">
+        <label for="propType">種類</label>
+        <select id="propType"><option value="building">建物</option><option value="lot">区画</option><option value="road">道路</option><option value="park">公園</option><option value="water">水域</option></select>
+        <label for="propColor">色</label><input id="propColor" type="color">
+        <div class="coord-grid">
+          <div><label for="propX">X</label><input id="propX" type="number" step="1"></div>
+          <div><label for="propY">Y</label><input id="propY" type="number" step="1"></div>
+          <div><label for="propW">幅</label><input id="propW" type="number" min="1" step="1"></div>
+          <div><label for="propH">高さ</label><input id="propH" type="number" min="1" step="1"></div>
+        </div>
+        <label for="propLayer">レイヤー</label><select id="propLayer"></select>
+      </div>
+    </div>
+  </aside>
+
+  <footer><span id="coords">カーソル座標を上部に固定表示</span><span id="status">準備完了</span></footer>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  // DOM参照を一箇所に集約し、描画ロジックをUIの詳細から分離する。
+  const $ = id => document.getElementById(id);
+  const canvas = $("canvas"), ctx = canvas.getContext("2d");
+  const ui = {
+    stage: $("stage"), objectList: $("objectList"), layerList: $("layerList"),
+    propertyForm: $("propertyForm"), noSelection: $("noSelection"),
+    propName: $("propName"), propType: $("propType"), propColor: $("propColor"), propX: $("propX"),
+    propY: $("propY"), propW: $("propW"), propH: $("propH"), propLayer: $("propLayer"),
+    coords: $("coords"), coordinateHud: $("coordinateHud"), status: $("status"), zoomBadge: $("zoomBadge"),
+    selectionBadge: $("selectionBadge"), snap: $("snap"), showGrid: $("showGrid"),
+    gridSize: $("gridSize"), showTiles: $("showTiles"), tileSize: $("tileSize"),
+    tilePixels: $("tilePixels"), selectedTileLabel: $("selectedTileLabel"),
+    pngBorders: $("pngBorders"), originX: $("originX"), originZ: $("originZ"),
+    newType: $("newType"), newColor: $("newColor"),
+    continuousDraw: $("continuousDraw"), toast: $("toast")
+  };
+
+  const state = {
+    objects: [], layers: [{ id: "layer-1", name: "区画・建物", visible: true }],
+    activeLayerId: "layer-1", selected: new Set(), tool: "select",
+    camera: { x: 0, y: 0, zoom: 1 }, pointerWorld: { x: 0, y: 0 },
+    selectedTile: { x: 0, y: 0 }, selectingTile: false,
+    action: null, clipboard: [], pasteOffset: 0, pointers: new Map(), pinch: null,
+    history: [], historyIndex: -1, nextId: 1
+  };
+
+  const HANDLE_SIZE = 9;
+  const MIN_SIZE = 1;
+  const colors = ["#4f8cff", "#ef6f6c", "#55c78a", "#f2b84b", "#a87cf5", "#39b7c5"];
+  const clone = value => JSON.parse(JSON.stringify(value));
+  const activeLayer = () => state.layers.find(l => l.id === state.activeLayerId) || state.layers[0];
+  const selectedObjects = () => state.objects.filter(o => state.selected.has(o.id));
+  const visibleObjects = () => state.objects.filter(o => state.layers.find(l => l.id === o.layerId)?.visible !== false);
+  const grid = () => Math.max(1, Number(ui.gridSize.value) || 10);
+  const tileSize = () => Math.max(1, Number(ui.tileSize.value) || 101);
+  const tileAt = (x, y) => {
+    const size=tileSize(), half=size/2;
+    return { x:Math.floor((x+half)/size), y:Math.floor((y+half)/size) };
+  };
+  const displayTile = tile => ({ x:tile.x, y:tile.y });
+  const tileBounds = (tx,ty) => {
+    const size=tileSize(), half=size/2;
+    return {x:tx*size-half,y:ty*size-half,width:size,height:size};
+  };
+  const minecraftAt = (x,y) => ({
+    x:x+(Number(ui.originX.value)||0), z:(Number(ui.originZ.value)||0)-y
+  });
+  const snap = n => ui.snap.checked ? Math.round(n / grid()) * grid() : n;
+  const fmt = n => Number.isInteger(n) ? String(n) : n.toFixed(1);
+  const screenToWorld = (x, y) => ({ x: (x - state.camera.x) / state.camera.zoom, y: (state.camera.y - y) / state.camera.zoom });
+  const worldToScreen = (x, y) => ({ x: x * state.camera.zoom + state.camera.x, y: state.camera.y - y * state.camera.zoom });
+
+  function toast(message) {
+    ui.toast.textContent = message;
+    ui.toast.classList.add("show");
+    clearTimeout(toast.timer);
+    toast.timer = setTimeout(() => ui.toast.classList.remove("show"), 1500);
+  }
+
+  // CanvasをCSSピクセルと端末の実ピクセル密度の両方に合わせる。
+  function resizeCanvas() {
+    const rect = ui.stage.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.max(1, Math.round(rect.width * dpr));
+    canvas.height = Math.max(1, Math.round(rect.height * dpr));
+    canvas.style.width = rect.width + "px";
+    canvas.style.height = rect.height + "px";
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    draw();
+  }
+
+  function drawGrid(w, h) {
+    if (!ui.showGrid.checked) return;
+    const z = state.camera.zoom;
+    let minor = grid();
+    while (minor * z < 12) minor *= 2;
+    const major = minor * 5;
+    const a = screenToWorld(0, 0), b = screenToWorld(w, h);
+    const left = Math.min(a.x,b.x), right = Math.max(a.x,b.x);
+    const bottom = Math.min(a.y,b.y), top = Math.max(a.y,b.y);
+
+    ctx.lineWidth = 1;
+    for (let x = Math.floor(left / minor) * minor; x <= right; x += minor) {
+      const sx = Math.round(x * z + state.camera.x) + .5;
+      ctx.strokeStyle = Math.abs(x % major) < .001 ? "#354052" : "#222936";
+      ctx.beginPath(); ctx.moveTo(sx, 0); ctx.lineTo(sx, h); ctx.stroke();
+    }
+    for (let y = Math.floor(bottom / minor) * minor; y <= top; y += minor) {
+      const sy = Math.round(y * z + state.camera.y) + .5;
+      ctx.strokeStyle = Math.abs(y % major) < .001 ? "#354052" : "#222936";
+      ctx.beginPath(); ctx.moveTo(0, sy); ctx.lineTo(w, sy); ctx.stroke();
+    }
+    // 原点軸は他のグリッドより明るく表示する。
+    const origin = worldToScreen(0, 0);
+    ctx.strokeStyle = "#62718a"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(origin.x + .5, 0); ctx.lineTo(origin.x + .5, h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, origin.y + .5); ctx.lineTo(w, origin.y + .5); ctx.stroke();
+  }
+
+  function drawTiles(w,h) {
+    if (!ui.showTiles.checked) return;
+    const a=screenToWorld(0,0), b=screenToWorld(w,h), size=tileSize(), half=size/2;
+    const left=Math.min(a.x,b.x), right=Math.max(a.x,b.x);
+    const bottom=Math.min(a.y,b.y), top=Math.max(a.y,b.y);
+    const minX=Math.floor((left+half)/size), maxX=Math.floor((right+half)/size);
+    const minY=Math.floor((top+half)/size), maxY=Math.floor((bottom+half)/size);
+    ctx.save(); ctx.strokeStyle="#f0b84b"; ctx.fillStyle="#f0b84b";
+    ctx.lineWidth=2; ctx.setLineDash([10,5]); ctx.font="bold 12px system-ui";
+    for(let tx=minX;tx<=maxX;tx++) for(let ty=minY;ty<=maxY;ty++) {
+      const b=tileBounds(tx,ty), r=objectRect(b);
+      ctx.strokeRect(r.x,r.y,r.w,r.h);
+      const display=displayTile({x:tx,y:ty});
+      ctx.setLineDash([]); ctx.fillText(`tile(${display.x},${display.y})`,r.x+6,r.y+16); ctx.setLineDash([10,5]);
+    }
+    const selected=tileBounds(state.selectedTile.x,state.selectedTile.y), sr=objectRect(selected);
+    ctx.setLineDash([]); ctx.strokeStyle="#58a6ff"; ctx.lineWidth=3; ctx.strokeRect(sr.x,sr.y,sr.w,sr.h);
+    ctx.restore();
+  }
+
+  function objectRect(o) {
+    const p = worldToScreen(o.x, o.y + o.height);
+    return { x: p.x, y: p.y, w: o.width * state.camera.zoom, h: o.height * state.camera.zoom };
+  }
+
+  function drawObject(o) {
+    const r = objectRect(o);
+    if (o.type === "road") drawRoad(o, r);
+    else {
+      ctx.fillStyle = o.type === "lot" ? o.color + "18" : o.color;
+      ctx.globalAlpha = o.type === "lot" ? 1 : .78;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = state.selected.has(o.id) ? "#ffffff" : (o.type === "lot" ? o.color : "#000000aa");
+      ctx.lineWidth = o.type === "lot" ? Math.max(2, state.camera.zoom * .8) : state.selected.has(o.id) ? 2 : 1;
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+    }
+    if (r.w > 35 && r.h > 18) {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(r.x, r.y, r.w, r.h); ctx.clip();
+      ctx.fillStyle = bestTextColor(o.color);
+      ctx.font = "12px system-ui"; ctx.textBaseline = "top";
+      ctx.fillText(o.name || "名称未設定", r.x + 5, r.y + 4);
+      ctx.restore();
+    }
+  }
+
+  // 道路は矩形の長辺を進行方向とみなし、縁石と破線の中央線を自動描画する。
+  function drawRoad(o, r) {
+    const horizontal = r.w >= r.h;
+    ctx.fillStyle = o.color || "#3d4248"; ctx.fillRect(r.x, r.y, r.w, r.h);
+    ctx.strokeStyle = state.selected.has(o.id) ? "#ffffff" : "#1c2025";
+    ctx.lineWidth = Math.max(2, Math.min(r.w, r.h) * .1);
+    ctx.strokeRect(r.x, r.y, r.w, r.h);
+    if (Math.min(r.w, r.h) < 8) return;
+    ctx.save();
+    ctx.strokeStyle = "#f1f0db"; ctx.lineWidth = Math.max(1, Math.min(3, state.camera.zoom));
+    ctx.setLineDash([Math.max(8, 12 * state.camera.zoom), Math.max(6, 8 * state.camera.zoom)]);
+    ctx.beginPath();
+    if (horizontal) { ctx.moveTo(r.x, r.y+r.h/2); ctx.lineTo(r.x+r.w, r.y+r.h/2); }
+    else { ctx.moveTo(r.x+r.w/2, r.y); ctx.lineTo(r.x+r.w/2, r.y+r.h); }
+    ctx.stroke(); ctx.restore();
+  }
+
+  function bestTextColor(hex) {
+    const c = hex.replace("#", ""), r = parseInt(c.slice(0,2),16), g = parseInt(c.slice(2,4),16), b = parseInt(c.slice(4,6),16);
+    return r * .299 + g * .587 + b * .114 > 150 ? "#111" : "#fff";
+  }
+
+  function selectionBounds() {
+    const list = selectedObjects();
+    if (!list.length) return null;
+    const x1 = Math.min(...list.map(o => o.x)), y1 = Math.min(...list.map(o => o.y));
+    const x2 = Math.max(...list.map(o => o.x + o.width)), y2 = Math.max(...list.map(o => o.y + o.height));
+    return { x: x1, y: y1, width: x2 - x1, height: y2 - y1 };
+  }
+
+  function getHandles(bounds) {
+    if (!bounds || state.selected.size !== 1) return [];
+    const r = { ...worldToScreen(bounds.x, bounds.y), w: bounds.width * state.camera.zoom, h: bounds.height * state.camera.zoom };
+    const points = {
+      nw:[r.x,r.y], n:[r.x+r.w/2,r.y], ne:[r.x+r.w,r.y], e:[r.x+r.w,r.y+r.h/2],
+      se:[r.x+r.w,r.y+r.h], s:[r.x+r.w/2,r.y+r.h], sw:[r.x,r.y+r.h], w:[r.x,r.y+r.h/2]
+    };
+    return Object.entries(points).map(([name,p]) => ({ name, x:p[0], y:p[1] }));
+  }
+
+  function drawSelection() {
+    const b = selectionBounds();
+    if (!b) return;
+    const r = objectRect({ x:b.x, y:b.y, width:b.width, height:b.height });
+    ctx.save(); ctx.setLineDash([6,4]); ctx.strokeStyle = "#58a6ff"; ctx.lineWidth = 1.5;
+    ctx.strokeRect(r.x - 2, r.y - 2, r.w + 4, r.h + 4); ctx.setLineDash([]);
+    for (const h of getHandles(b)) {
+      ctx.fillStyle = "#f4f7fb"; ctx.strokeStyle = "#247ac7";
+      ctx.fillRect(h.x-HANDLE_SIZE/2,h.y-HANDLE_SIZE/2,HANDLE_SIZE,HANDLE_SIZE);
+      ctx.strokeRect(h.x-HANDLE_SIZE/2,h.y-HANDLE_SIZE/2,HANDLE_SIZE,HANDLE_SIZE);
+    }
+    ctx.restore();
+  }
+
+  function drawActionPreview() {
+    const a = state.action;
+    if (!a || !["draw","marquee"].includes(a.type)) return;
+    const x = Math.min(a.startWorld.x, a.currentWorld.x), y = Math.min(a.startWorld.y, a.currentWorld.y);
+    const w = Math.abs(a.currentWorld.x-a.startWorld.x), h = Math.abs(a.currentWorld.y-a.startWorld.y);
+    const r = objectRect({x,y,width:w,height:h});
+    ctx.save(); ctx.setLineDash([6,4]);
+    ctx.fillStyle = a.type === "draw" ? ui.newColor.value + "55" : "#58a6ff22";
+    ctx.strokeStyle = a.type === "draw" ? ui.newColor.value : "#58a6ff";
+    ctx.fillRect(r.x,r.y,r.w,r.h); ctx.strokeRect(r.x,r.y,r.w,r.h); ctx.restore();
+  }
+
+  function draw() {
+    const rect = ui.stage.getBoundingClientRect();
+    ctx.clearRect(0,0,rect.width,rect.height);
+    ctx.fillStyle = "#0d1015"; ctx.fillRect(0,0,rect.width,rect.height);
+    drawGrid(rect.width,rect.height);
+    drawTiles(rect.width,rect.height);
+    // レイヤー順、同一レイヤー内の配列順で奥から描画する。
+    for (const layer of state.layers) {
+      if (!layer.visible) continue;
+      state.objects.filter(o => o.layerId === layer.id).forEach(drawObject);
+    }
+    drawSelection();
+    drawActionPreview();
+    ui.zoomBadge.textContent = Math.round(state.camera.zoom * 100) + "%";
+  }
+
+  function snapshot() {
+    return { objects: clone(state.objects), layers: clone(state.layers), activeLayerId: state.activeLayerId, nextId: state.nextId };
+  }
+
+  function pushHistory() {
+    const data = JSON.stringify(snapshot());
+    if (state.history[state.historyIndex] === data) return;
+    state.history.splice(state.historyIndex + 1);
+    state.history.push(data);
+    if (state.history.length > 100) state.history.shift();
+    state.historyIndex = state.history.length - 1;
+    updateUndoButtons();
+  }
+
+  function restoreHistory(index) {
+    if (index < 0 || index >= state.history.length) return;
+    const s = JSON.parse(state.history[index]);
+    Object.assign(state, s); state.historyIndex = index; state.selected.clear();
+    refreshUI(); draw();
+  }
+
+  function updateUndoButtons() {
+    $("undoBtn").disabled = state.historyIndex <= 0;
+    $("redoBtn").disabled = state.historyIndex >= state.history.length - 1;
+  }
+
+  function createUniqueId(preferredId) {
+    const used = new Set(state.objects.map(o => String(o.id)));
+    if (preferredId != null && preferredId !== "" && !used.has(String(preferredId))) {
+      const id = String(preferredId);
+      const match = /^obj-(\d+)$/.exec(id);
+      if (match) state.nextId = Math.max(state.nextId, Number(match[1]) + 1);
+      return id;
+    }
+    let id;
+    do { id = "obj-" + state.nextId++; } while (used.has(id));
+    return id;
+  }
+
+  function addObject(data) {
+    const o = {
+      id: createUniqueId(data.id),
+      name: data.name || "オブジェクト " + state.nextId,
+      x: Number(data.x) || 0, y: Number(data.y) || 0,
+      width: Math.max(MIN_SIZE, Number(data.width) || grid()),
+      height: Math.max(MIN_SIZE, Number(data.height) || grid()),
+      color: /^#[0-9a-f]{6}$/i.test(data.color) ? data.color : ui.newColor.value,
+      type: ["building","lot","road","park","water"].includes(data.type) ? data.type : "building",
+      layerId: data.layerId || activeLayer().id
+    };
+    state.objects.push(o);
+    return o;
+  }
+
+  function hitObject(world) {
+    // 見た目で一番手前の矩形を返す。
+    const list = visibleObjects();
+    for (let i=list.length-1; i>=0; i--) {
+      const o=list[i];
+      if (world.x>=o.x && world.x<=o.x+o.width && world.y>=o.y && world.y<=o.y+o.height) return o;
+    }
+    return null;
+  }
+
+  function hitHandle(x,y) {
+    for (const h of getHandles(selectionBounds())) {
+      if (Math.abs(x-h.x)<=HANDLE_SIZE && Math.abs(y-h.y)<=HANDLE_SIZE) return h.name;
+    }
+    return null;
+  }
+
+  function eventPoint(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x:e.clientX-r.left, y:e.clientY-r.top };
+  }
+
+  function pointerDown(e) {
+    if (e.button !== undefined && ![0,1].includes(e.button) && e.pointerType !== "touch") return;
+    canvas.setPointerCapture?.(e.pointerId);
+    const p=eventPoint(e), world=screenToWorld(p.x,p.y);
+    state.pointerWorld=world;
+    closeMobilePanels();
+    if (state.selectingTile) {
+      state.selectedTile=tileAt(world.x,world.y);
+      state.selectingTile=false;
+      updateSelectedTileLabel();
+      setTool("select");
+      draw();
+      toast("保存するタイルを選択しました");
+      return;
+    }
+
+    // 2本指操作は、現在の編集操作より優先してズーム兼パンに切り替える。
+    if (e.pointerType==="touch") {
+      state.pointers.set(e.pointerId,p);
+      if (state.pointers.size===2) {
+        const [a,b]=[...state.pointers.values()];
+        const center={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+        state.pinch={
+          distance:Math.hypot(a.x-b.x,a.y-b.y),
+          zoom:state.camera.zoom, world:screenToWorld(center.x,center.y)
+        };
+        state.action=null;
+        return;
+      }
+    }
+
+    const wantsPan = state.tool==="pan" || e.button===1 || e.altKey;
+    if (wantsPan) {
+      state.action={type:"pan",start:p,camera:{...state.camera}}; return;
+    }
+    if (state.tool==="rect") {
+      const start={x:snap(world.x),y:snap(world.y)};
+      state.action={type:"draw",startWorld:start,currentWorld:start}; draw(); return;
+    }
+    const handle=hitHandle(p.x,p.y);
+    if (handle) {
+      const o=selectedObjects()[0];
+      state.action={type:"resize",handle,startWorld:world,original:clone(o),id:o.id};
+      return;
+    }
+    const hit=hitObject(world);
+    if (hit) {
+      if (e.shiftKey) {
+        state.selected.has(hit.id) ? state.selected.delete(hit.id) : state.selected.add(hit.id);
+      } else {
+        state.selected.clear(); state.selected.add(hit.id);
+      }
+      state.action={type:"move",startWorld:world,originals:selectedObjects().map(clone)};
+      refreshUI(); draw();
+    } else {
+      if (e.shiftKey) {
+        state.action={type:"marquee",startWorld:world,currentWorld:world,additive:true};
+      } else {
+        state.selected.clear();
+        state.action=null;
+      }
+      refreshUI(); draw();
+    }
+  }
+
+  function pointerMove(e) {
+    const p=eventPoint(e), world=screenToWorld(p.x,p.y);
+    state.pointerWorld=world;
+    const mc=minecraftAt(world.x,world.y), tile=displayTile(tileAt(world.x,world.y));
+    ui.coordinateHud.innerHTML=`地図 <span>X ${fmt(world.x)} / Y ${fmt(world.y)}</span>　Minecraft <span>X ${fmt(mc.x)} / Z ${fmt(mc.z)}</span><small>カーソル位置: tile(${tile.x},${tile.y})</small>`;
+    if (e.pointerType==="touch" && state.pointers.has(e.pointerId)) {
+      state.pointers.set(e.pointerId,p);
+      if (state.pinch && state.pointers.size>=2) {
+        const [a,b]=[...state.pointers.values()];
+        const center={x:(a.x+b.x)/2,y:(a.y+b.y)/2};
+        const distance=Math.max(1,Math.hypot(a.x-b.x,a.y-b.y));
+        state.camera.zoom=Math.max(.05,Math.min(20,state.pinch.zoom*distance/state.pinch.distance));
+        state.camera.x=center.x-state.pinch.world.x*state.camera.zoom;
+        state.camera.y=center.y-state.pinch.world.y*state.camera.zoom;
+        draw();
+        return;
+      }
+    }
+    const a=state.action;
+    if (!a) { updateCursor(p); return; }
+    if (a.type==="pan") {
+      state.camera.x=a.camera.x+(p.x-a.start.x); state.camera.y=a.camera.y+(p.y-a.start.y);
+    } else if (a.type==="draw" || a.type==="marquee") {
+      a.currentWorld={x:snap(world.x),y:snap(world.y)};
+    } else if (a.type==="move") {
+      let dx=world.x-a.startWorld.x, dy=world.y-a.startWorld.y;
+      if (ui.snap.checked && a.originals.length) {
+        dx=snap(a.originals[0].x+dx)-a.originals[0].x;
+        dy=snap(a.originals[0].y+dy)-a.originals[0].y;
+      }
+      for (const original of a.originals) {
+        const o=state.objects.find(x=>x.id===original.id);
+        o.x=original.x+dx; o.y=original.y+dy;
+      }
+      updatePropertyForm();
+    } else if (a.type==="resize") {
+      resizeObject(a,world); updatePropertyForm();
+    }
+    draw();
+  }
+
+  function resizeObject(a,world) {
+    const o=state.objects.find(x=>x.id===a.id), r=a.original;
+    let left=r.x, bottom=r.y, right=r.x+r.width, top=r.y+r.height;
+    const x=snap(world.x), y=snap(world.y);
+    if (a.handle.includes("w")) left=Math.min(x,right-MIN_SIZE);
+    if (a.handle.includes("e")) right=Math.max(x,left+MIN_SIZE);
+    if (a.handle.includes("n")) top=Math.max(y,bottom+MIN_SIZE);
+    if (a.handle.includes("s")) bottom=Math.min(y,top-MIN_SIZE);
+    o.x=left; o.y=bottom; o.width=right-left; o.height=top-bottom;
+  }
+
+  function pointerUp(e) {
+    if (e?.pointerType==="touch") {
+      state.pointers.delete(e.pointerId);
+      if (state.pinch) {
+        if (state.pointers.size<2) state.pinch=null;
+        state.action=null;
+        draw();
+        return;
+      }
+    }
+    const a=state.action; if (!a) return;
+    if (a.type==="draw") {
+      const x=Math.min(a.startWorld.x,a.currentWorld.x), y=Math.min(a.startWorld.y,a.currentWorld.y);
+      const w=Math.abs(a.currentWorld.x-a.startWorld.x), h=Math.abs(a.currentWorld.y-a.startWorld.y);
+      if (w>=MIN_SIZE && h>=MIN_SIZE) {
+        const names={building:"建物",lot:"区画",road:"道路",park:"公園",water:"水域"};
+        const o=addObject({name:names[ui.newType.value],type:ui.newType.value,x,y,width:w,height:h,color:ui.newColor.value});
+        state.selected.clear(); state.selected.add(o.id); pushHistory();
+        if (!ui.continuousDraw.checked) setTool("select");
+      }
+    } else if (a.type==="marquee") {
+      const x1=Math.min(a.startWorld.x,a.currentWorld.x), y1=Math.min(a.startWorld.y,a.currentWorld.y);
+      const x2=Math.max(a.startWorld.x,a.currentWorld.x), y2=Math.max(a.startWorld.y,a.currentWorld.y);
+      for (const o of visibleObjects()) {
+        if (o.x>=x1 && o.y>=y1 && o.x+o.width<=x2 && o.y+o.height<=y2) state.selected.add(o.id);
+      }
+    } else if (a.type==="move" || a.type==="resize") {
+      pushHistory();
+    }
+    state.action=null; refreshUI(); draw();
+  }
+
+  function updateCursor(p) {
+    if (state.tool==="pan") canvas.style.cursor="grab";
+    else if (state.tool==="rect") canvas.style.cursor="crosshair";
+    else {
+      const h=hitHandle(p.x,p.y);
+      const cursors={n:"ns-resize",s:"ns-resize",e:"ew-resize",w:"ew-resize",nw:"nwse-resize",se:"nwse-resize",ne:"nesw-resize",sw:"nesw-resize"};
+      canvas.style.cursor=h ? cursors[h] : hitObject(screenToWorld(p.x,p.y)) ? "move" : "default";
+    }
+  }
+
+  function wheel(e) {
+    e.preventDefault();
+    const p=eventPoint(e), before=screenToWorld(p.x,p.y);
+    const factor=Math.exp(-e.deltaY*.0015);
+    state.camera.zoom=Math.max(.05,Math.min(20,state.camera.zoom*factor));
+    state.camera.x=p.x-before.x*state.camera.zoom;
+    state.camera.y=p.y-before.y*state.camera.zoom;
+    draw();
+  }
+
+  function setTool(tool) {
+    state.selectingTile=false;
+    state.tool=tool;
+    document.querySelectorAll("[data-tool]").forEach(b=>b.classList.toggle("active",b.dataset.tool===tool));
+    canvas.style.cursor=tool==="pan"?"grab":tool==="rect"?"crosshair":"default";
+    ui.status.textContent={select:"選択ツール",rect:"矩形ツール",pan:"移動ツール"}[tool];
+    closeMobilePanels();
+  }
+
+  function deleteSelected() {
+    if (!state.selected.size) return;
+    state.objects=state.objects.filter(o=>!state.selected.has(o.id));
+    state.selected.clear(); pushHistory(); refreshUI(); draw(); toast("削除しました");
+  }
+
+  function copySelected() {
+    state.clipboard=selectedObjects().map(clone); state.pasteOffset=0;
+    if (state.clipboard.length) toast(`${state.clipboard.length}件コピーしました`);
+  }
+
+  function pasteObjects() {
+    if (!state.clipboard.length) return;
+    state.pasteOffset+=grid();
+    state.selected.clear();
+    for (const src of state.clipboard) {
+      const o=addObject({...src,id:null,x:src.x+state.pasteOffset,y:src.y+state.pasteOffset,name:src.name+" コピー"});
+      state.selected.add(o.id);
+    }
+    pushHistory(); refreshUI(); draw(); toast("貼り付けました");
+  }
+
+  function refreshUI() {
+    renderLayers(); renderObjects(); updatePropertyForm(); updateUndoButtons();
+    ui.selectionBadge.textContent=state.selected.size ? `${state.selected.size}件選択` : "選択なし";
+  }
+
+  function renderObjects() {
+    ui.objectList.innerHTML="";
+    if (!state.objects.length) { ui.objectList.innerHTML='<div class="empty">オブジェクトはありません</div>'; return; }
+    [...state.layers].reverse().forEach(layer=>{
+      [...state.objects].reverse().filter(o=>o.layerId===layer.id).forEach(o=>{
+        const item=document.createElement("div");
+        item.className="list-item"+(state.selected.has(o.id)?" selected":"");
+        item.innerHTML=`<span></span><span class="swatch"></span><span class="item-name"></span><button class="mini" title="選択">●</button>`;
+        item.children[0].textContent=layer.visible?"":"×";
+        item.children[1].style.background=o.color; item.children[2].textContent=o.name;
+        item.title=`${layer.name} / (${fmt(o.x)}, ${fmt(o.y)})`;
+        item.addEventListener("click",e=>{
+          if (!e.shiftKey) state.selected.clear();
+          state.selected.add(o.id); refreshUI(); draw();
+        });
+        ui.objectList.appendChild(item);
+      });
+    });
+  }
+
+  function renderLayers() {
+    ui.layerList.innerHTML="";
+    state.layers.forEach(layer=>{
+      const item=document.createElement("div");
+      item.className="list-item"+(layer.id===state.activeLayerId?" selected":"");
+      item.innerHTML=`<input type="checkbox"><span class="swatch"></span><span class="item-name"></span><span></span>`;
+      item.children[0].checked=layer.visible;
+      item.children[0].addEventListener("change",e=>{layer.visible=e.target.checked;draw();renderObjects();});
+      item.children[1].style.background=colors[state.layers.indexOf(layer)%colors.length];
+      item.children[2].textContent=layer.name;
+      item.addEventListener("click",e=>{if(e.target.type!=="checkbox"){state.activeLayerId=layer.id;refreshUI();}});
+      ui.layerList.appendChild(item);
+    });
+    ui.propLayer.innerHTML=state.layers.map(l=>`<option value="${escapeHtml(l.id)}">${escapeHtml(l.name)}</option>`).join("");
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  function updatePropertyForm() {
+    const list=selectedObjects(), one=list.length===1;
+    ui.propertyForm.hidden=!one; ui.noSelection.hidden=one;
+    if (!one) {
+      ui.noSelection.textContent=list.length>1?`${list.length}件を選択中（移動・削除・コピーが可能）`:"矩形を選択してください";
+      return;
+    }
+    const o=list[0];
+    ui.propName.value=o.name; ui.propType.value=o.type || "building"; ui.propColor.value=o.color;
+    ui.propX.value=fmt(o.x); ui.propY.value=fmt(o.y); ui.propW.value=fmt(o.width); ui.propH.value=fmt(o.height);
+    ui.propLayer.value=o.layerId;
+  }
+
+  function applyProperty(key,value) {
+    const o=selectedObjects()[0]; if(!o)return;
+    if (["x","y","width","height"].includes(key)) {
+      value=Number(value); if(!Number.isFinite(value))return;
+      if (key==="width"||key==="height") value=Math.max(MIN_SIZE,value);
+    }
+    o[key]=value; pushHistory(); refreshUI(); draw();
+  }
+
+  function addLayer() {
+    const id="layer-"+Date.now(), layer={id,name:`レイヤー ${state.layers.length+1}`,visible:true};
+    state.layers.push(layer); state.activeLayerId=id; pushHistory(); refreshUI();
+  }
+
+  function renameLayer() {
+    const layer=activeLayer(); if(!layer)return;
+    const name=prompt("レイヤー名",layer.name);
+    if(name?.trim()){layer.name=name.trim();pushHistory();refreshUI();}
+  }
+
+  function moveLayer(direction) {
+    const i=state.layers.findIndex(l=>l.id===state.activeLayerId), j=i+direction;
+    if(i<0||j<0||j>=state.layers.length)return;
+    [state.layers[i],state.layers[j]]=[state.layers[j],state.layers[i]];
+    pushHistory();refreshUI();draw();
+  }
+
+  function exportData() {
+    return {
+      version: "1.4", gridSize:grid(), tileSize:tileSize(),
+      minecraftOrigin:{x:Number(ui.originX.value)||0,z:Number(ui.originZ.value)||0},
+      layers:clone(state.layers),
+      objects:state.objects.map(({id,layerId,name,type,x,y,width,height,color})=>({id,name,type,x,y,width,height,color,layerId}))
+    };
+  }
+
+  function download(blob,name) {
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  }
+
+  function saveJSON() {
+    download(new Blob([JSON.stringify(exportData(),null,2)],{type:"application/json"}),"city-map.json");
+    toast("JSONを保存しました");
+  }
+
+  async function loadJSON(file) {
+    try {
+      const data=JSON.parse(await file.text());
+      if(!Array.isArray(data.objects))throw new Error("objects配列がありません");
+      const layers=Array.isArray(data.layers)&&data.layers.length ? data.layers : [{id:"layer-1",name:"読み込みデータ",visible:true}];
+      state.layers=layers.map((l,i)=>({id:String(l.id||`layer-${i+1}`),name:String(l.name||`レイヤー ${i+1}`),visible:l.visible!==false}));
+      state.activeLayerId=state.layers[0].id; state.objects=[]; state.nextId=1;
+      const legacyYAxis = data.version !== "1.4";
+      data.objects.forEach(o=>{
+        const height = Math.max(MIN_SIZE, Number(o.height) || grid());
+        addObject({
+          ...o,
+          y: legacyYAxis ? -(Number(o.y || 0) + height) : o.y,
+          height,
+          layerId:state.layers.some(l=>l.id===o.layerId)?o.layerId:state.activeLayerId
+        });
+      });
+      if(data.gridSize)ui.gridSize.value=Math.max(1,Number(data.gridSize)||10);
+      if(data.tileSize)ui.tileSize.value=Math.max(1,Number(data.tileSize)||101);
+      if(data.minecraftOrigin) {
+        ui.originX.value=Number(data.minecraftOrigin.x)||0;
+        ui.originZ.value=Number(data.minecraftOrigin.z)||0;
+      }
+      state.selected.clear(); state.history=[]; state.historyIndex=-1; pushHistory();
+      fitAll(); refreshUI(); toast("JSONを読み込みました");
+    } catch(err) { alert("JSONを読み込めませんでした。\n"+err.message); }
+  }
+
+  function exportPNG() {
+    const rect=ui.stage.getBoundingClientRect(), out=document.createElement("canvas");
+    out.width=Math.max(1,Math.round(rect.width)); out.height=Math.max(1,Math.round(rect.height));
+    const c=out.getContext("2d");
+    c.fillStyle="#0d1015"; c.fillRect(0,0,out.width,out.height);
+    c.save(); c.translate(state.camera.x,state.camera.y);
+    c.scale(state.camera.zoom,-state.camera.zoom);
+    renderObjectsForPNG(c,state.camera.zoom,ui.pngBorders.checked);
+    c.restore();
+    out.toBlob(blob=>download(blob,"city-map.png"),"image/png");
+    toast("PNGを出力しました");
+  }
+
+  function exportCurrentTilePNG() {
+    const tile=state.selectedTile;
+    const bounds=tileBounds(tile.x,tile.y), ppb=Math.max(1,Math.min(20,Number(ui.tilePixels.value)||5));
+    const size=Math.round(bounds.width*ppb), out=document.createElement("canvas");
+    out.width=size; out.height=size;
+    const c=out.getContext("2d");
+    c.fillStyle="#ffffff"; c.fillRect(0,0,size,size);
+    c.save(); c.translate(-bounds.x*ppb,(bounds.y+bounds.height)*ppb); c.scale(ppb,-ppb);
+    for(const layer of state.layers) {
+      if(!layer.visible)continue;
+      for(const o of state.objects.filter(o=>o.layerId===layer.id)) drawObjectToContext(c,o,ppb,ui.pngBorders.checked);
+    }
+    c.restore();
+    const display=displayTile(tile);
+    out.toBlob(blob=>download(blob,`tile_${display.x}_${display.y}.png`),"image/png");
+    toast(`tile(${display.x},${display.y}) を保存しました`);
+  }
+
+  function renderObjectsForPNG(c,scale,includeBorders) {
+    for(const layer of state.layers) {
+      if(!layer.visible)continue;
+      for(const o of state.objects.filter(o=>o.layerId===layer.id)) drawObjectToContext(c,o,scale,includeBorders);
+    }
+  }
+
+  function drawObjectToContext(c,o,scale,includeBorders) {
+    const x=o.x,y=o.y,w=o.width,h=o.height;
+    if(o.type==="road") {
+      c.fillStyle=o.color||"#3d4248";c.fillRect(x,y,w,h);
+      if(includeBorders){c.strokeStyle="#1c2025";c.lineWidth=Math.max(1/scale,Math.min(w,h)*.1);c.strokeRect(x,y,w,h);}
+      c.strokeStyle="#f1f0db";c.lineWidth=Math.max(1/scale,.4);c.setLineDash([3,2]);c.beginPath();
+      if(w>=h){c.moveTo(x,y+h/2);c.lineTo(x+w,y+h/2);}else{c.moveTo(x+w/2,y);c.lineTo(x+w/2,y+h);}
+      c.stroke();c.setLineDash([]);
+    } else {
+      c.globalAlpha=o.type==="lot"?.12:.78;c.fillStyle=o.color;c.fillRect(x,y,w,h);c.globalAlpha=1;
+      if(includeBorders){c.strokeStyle=o.type==="lot"?o.color:"#000000aa";c.lineWidth=o.type==="lot"?Math.max(1/scale,.5):1/scale;c.strokeRect(x,y,w,h);}
+    }
+  }
+
+  function updateSelectedTileLabel() {
+    const display=displayTile(state.selectedTile);
+    ui.selectedTileLabel.textContent=`選択タイル: tile(${display.x},${display.y})`;
+  }
+
+  function fitAll() {
+    const rect=ui.stage.getBoundingClientRect();
+    if(!state.objects.length){state.camera={x:rect.width/2,y:rect.height/2,zoom:1};draw();return;}
+    const x1=Math.min(...state.objects.map(o=>o.x)), y1=Math.min(...state.objects.map(o=>o.y));
+    const x2=Math.max(...state.objects.map(o=>o.x+o.width)), y2=Math.max(...state.objects.map(o=>o.y+o.height));
+    const pad=60, z=Math.max(.05,Math.min(10,Math.min((rect.width-pad*2)/(x2-x1||1),(rect.height-pad*2)/(y2-y1||1))));
+    state.camera.zoom=z; state.camera.x=rect.width/2-(x1+x2)/2*z; state.camera.y=rect.height/2+(y1+y2)/2*z;draw();
+  }
+
+  function newMap() {
+    if(state.objects.length&&!confirm("現在の地図を消去して新規作成しますか？"))return;
+    state.objects=[];state.layers=[{id:"layer-1",name:"区画・建物",visible:true}];state.activeLayerId="layer-1";
+    state.selected.clear();state.nextId=1;state.history=[];state.historyIndex=-1;pushHistory();fitAll();refreshUI();
+  }
+
+  function closeMobilePanels(){ $("leftPanel").classList.remove("open");$("rightPanel").classList.remove("open"); }
+
+  function choosePreset(type) {
+    const settings={
+      road:{color:"#3d4248"}, lot:{color:"#d5d9df"},
+      building:{color:"#4f7f78"}, park:{color:"#4f8f54"}
+    };
+    ui.newType.value=type; ui.newColor.value=settings[type].color;
+    setTool("rect"); toast(`${{road:"道路",lot:"区画",building:"建物",park:"公園"}[type]}を作図`);
+  }
+
+  // UIイベント
+  document.querySelectorAll("[data-tool]").forEach(b=>b.addEventListener("click",()=>setTool(b.dataset.tool)));
+  document.querySelectorAll("[data-preset]").forEach(b=>b.addEventListener("click",()=>choosePreset(b.dataset.preset)));
+  canvas.addEventListener("pointerdown",pointerDown);
+  canvas.addEventListener("pointermove",pointerMove);
+  canvas.addEventListener("pointerup",pointerUp);
+  canvas.addEventListener("pointercancel",pointerUp);
+  canvas.addEventListener("wheel",wheel,{passive:false});
+  canvas.addEventListener("contextmenu",e=>e.preventDefault());
+  $("deleteBtn").addEventListener("click",deleteSelected);
+  $("undoBtn").addEventListener("click",()=>restoreHistory(state.historyIndex-1));
+  $("redoBtn").addEventListener("click",()=>restoreHistory(state.historyIndex+1));
+  $("saveBtn").addEventListener("click",saveJSON);
+  $("loadBtn").addEventListener("click",()=>$("fileInput").click());
+  $("fileInput").addEventListener("change",e=>{if(e.target.files[0])loadJSON(e.target.files[0]);e.target.value="";});
+  $("pngBtn").addEventListener("click",exportPNG);
+  $("tilePngBtn").addEventListener("click",exportCurrentTilePNG);
+  $("selectTileBtn").addEventListener("click",()=>{
+    state.selectingTile=true; state.action=null; canvas.style.cursor="crosshair";
+    ui.status.textContent="保存するタイルをクリックしてください";
+    closeMobilePanels();
+  });
+  $("fitBtn").addEventListener("click",fitAll);
+  $("newBtn").addEventListener("click",newMap);
+  $("addLayerBtn").addEventListener("click",addLayer);
+  $("renameLayerBtn").addEventListener("click",renameLayer);
+  $("layerUpBtn").addEventListener("click",()=>moveLayer(1));
+  $("layerDownBtn").addEventListener("click",()=>moveLayer(-1));
+  $("leftToggle").addEventListener("click",()=>{$("rightPanel").classList.remove("open");$("leftPanel").classList.toggle("open");});
+  $("rightToggle").addEventListener("click",()=>{$("leftPanel").classList.remove("open");$("rightPanel").classList.toggle("open");});
+  [ui.gridSize,ui.snap,ui.showGrid,ui.showTiles,ui.tileSize,ui.originX,ui.originZ].forEach(el=>el.addEventListener("change",draw));
+  ui.propName.addEventListener("change",()=>applyProperty("name",ui.propName.value));
+  ui.propType.addEventListener("change",()=>applyProperty("type",ui.propType.value));
+  ui.propColor.addEventListener("change",()=>applyProperty("color",ui.propColor.value));
+  ui.propX.addEventListener("change",()=>applyProperty("x",ui.propX.value));
+  ui.propY.addEventListener("change",()=>applyProperty("y",ui.propY.value));
+  ui.propW.addEventListener("change",()=>applyProperty("width",ui.propW.value));
+  ui.propH.addEventListener("change",()=>applyProperty("height",ui.propH.value));
+  ui.propLayer.addEventListener("change",()=>applyProperty("layerId",ui.propLayer.value));
+
+  window.addEventListener("keydown",e=>{
+    const typing=/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName);
+    if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="z"){e.preventDefault();restoreHistory(state.historyIndex+(e.shiftKey?1:-1));}
+    else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="y"){e.preventDefault();restoreHistory(state.historyIndex+1);}
+    else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="c"&&!typing){e.preventDefault();copySelected();}
+    else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="v"&&!typing){e.preventDefault();pasteObjects();}
+    else if((e.key==="Delete"||e.key==="Backspace")&&!typing){e.preventDefault();deleteSelected();}
+    else if(e.key==="Escape"){state.selected.clear();state.action=null;closeMobilePanels();refreshUI();draw();}
+    else if(!typing&&e.key.toLowerCase()==="v")setTool("select");
+    else if(!typing&&e.key.toLowerCase()==="r")setTool("rect");
+    else if(!typing&&e.key.toLowerCase()==="h")setTool("pan");
+  });
+
+  new ResizeObserver(resizeCanvas).observe(ui.stage);
+  state.camera.x=innerWidth/2;state.camera.y=innerHeight/2;
+  pushHistory();refreshUI();updateSelectedTileLabel();resizeCanvas();
+})();
+</script>
+</body>
+</html>
